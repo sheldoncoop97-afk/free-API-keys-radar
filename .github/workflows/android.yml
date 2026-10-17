@@ -27,11 +27,12 @@ jobs:
           java-version: '17'
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK packages
-        run: |
-          sdkmanager "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+        uses: android-actions/setup-android@v4
+        with:
+          packages: |
+            platform-tools
+            platforms;android-35
+            build-tools;35.0.0
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -44,17 +45,20 @@ jobs:
           set -euo pipefail
 
           ZIP="Umbrella-Corp-Android-Project-Visual-Refresh.zip"
-          test -f "$ZIP" || {
-            echo "ERROR: Missing $ZIP"
+
+          if [ ! -f "$ZIP" ]; then
+            echo "ERROR: Missing ZIP: $ZIP"
             exit 1
-          }
+          fi
 
           mkdir -p "$RUNNER_TEMP/umbrella-project"
           unzip -q "$ZIP" -d "$RUNNER_TEMP/umbrella-project"
 
           PROJECT=""
+
           while IFS= read -r FILE; do
             DIR="$(dirname "$FILE")"
+
             if [ -f "$DIR/app/build.gradle" ] || \
                [ -f "$DIR/app/build.gradle.kts" ]; then
               PROJECT="$DIR"
@@ -62,14 +66,16 @@ jobs:
             fi
           done < <(
             find "$RUNNER_TEMP/umbrella-project" \
-              \( -name settings.gradle -o -name settings.gradle.kts \) \
-              -type f
+              -type f \
+              \( -name settings.gradle -o -name settings.gradle.kts \)
           )
 
           if [ -z "$PROJECT" ]; then
-            echo "ERROR: Could not find Android project with settings.gradle and app/build.gradle"
-            echo "ZIP contents:"
-            find "$RUNNER_TEMP/umbrella-project" -maxdepth 4 -type f | head -200
+            echo "ERROR: Android project not found in ZIP."
+            echo "Expected settings.gradle and app/build.gradle."
+            echo "Files found in ZIP:"
+            find "$RUNNER_TEMP/umbrella-project" \
+              -maxdepth 5 -type f | head -200
             exit 1
           fi
 
