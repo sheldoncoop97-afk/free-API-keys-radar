@@ -1,20 +1,24 @@
-
 name: Build Umbrella Corp APK
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - 'Umbrella-Corp-Android-Project-Visual-Refresh.zip'
+      - '*.zip'
       - '.github/workflows/android.yml'
 
 permissions:
   contents: read
 
+concurrency:
+  group: umbrella-android-build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
+    name: Build Android debug APK
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
 
     env:
       ANDROID_HOME: /usr/local/lib/android/sdk
@@ -34,83 +38,89 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
-          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" \
-            -type f -name sdkmanager | sort -V | tail -n 1)"
-
+          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
           if [ -z "$SDKMANAGER" ]; then
-            echo "ERROR: sdkmanager not found in $ANDROID_HOME/cmdline-tools"
+            echo "ERROR: sdkmanager not found in $ANDROID_HOME/cmdline-tools" >&2
             exit 1
           fi
-
-          echo "Using sdkmanager: $SDKMANAGER"
-
-          yes | "$SDKMANAGER" --licenses || true
-
-          "$SDKMANAGER" \
-            "platform-tools" \
-            "platforms;android-35" \
-            "build-tools;35.0.0"
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
-      - name: Extract and locate Umbrella project
+      - name: Find and extract Android project ZIP
+        id: project
         shell: bash
         run: |
           set -euo pipefail
-
-          ZIP="Umbrella-Corp-Android-Project-Visual-Refresh.zip"
-
-          if [ ! -f "$ZIP" ]; then
-            echo "ERROR: Missing ZIP: $ZIP"
+          mkdir -p "$RUNNER_TEMP/umbrella-project"
+          ZIP=""
+          for CANDIDATE in \
+            "Umbrella-Corp-Android-Project-Professional.zip" \
+            "Umbrella-Corp-Android-Project-Visual-Refresh.zip" \
+            "Umbrella-Corp-Android-Project.zip"; do
+            if [ -f "$CANDIDATE" ]; then ZIP="$CANDIDATE"; break; fi
+          done
+          if [ -z "$ZIP" ]; then
+            ZIP="$(find . -maxdepth 1 -type f -name '*.zip' -printf '%f\n' | sort | head -n 1)"
+          fi
+          if [ -z "$ZIP" ] || [ ! -f "$ZIP" ]; then
+            echo "ERROR: No project ZIP found in repository root." >&2
+            ls -la
             exit 1
           fi
-
-          mkdir -p "$RUNNER_TEMP/umbrella-project"
+          echo "Selected project archive: $ZIP"
           unzip -q "$ZIP" -d "$RUNNER_TEMP/umbrella-project"
-
           PROJECT=""
-
-          while IFS= read -r FILE; do
-            DIR="$(dirname "$FILE")"
-
-            if [ -f "$DIR/app/build.gradle" ] || \
-               [ -f "$DIR/app/build.gradle.kts" ]; then
+          while IFS= read -r SETTINGS; do
+            DIR="$(dirname "$SETTINGS")"
+            if { [ -f "$DIR/app/build.gradle" ] || [ -f "$DIR/app/build.gradle.kts" ]; } \
+              && { [ -f "$DIR/settings.gradle" ] || [ -f "$DIR/settings.gradle.kts" ]; }; then
               PROJECT="$DIR"
               break
             fi
-          done < <(
-            find "$RUNNER_TEMP/umbrella-project" \
-              -type f \
-              \( -name settings.gradle -o -name settings.gradle.kts \)
-          )
-
+          done < <(find "$RUNNER_TEMP/umbrella-project" -type f \( -name settings.gradle -o -name settings.gradle.kts \) | sort)
           if [ -z "$PROJECT" ]; then
-            echo "ERROR: Android project not found in ZIP."
-            echo "Expected settings.gradle and app/build.gradle."
-            echo "Files found in ZIP:"
-            find "$RUNNER_TEMP/umbrella-project" \
-              -maxdepth 5 -type f | head -200
+            echo "ERROR: Could not locate an Android Gradle project with settings.gradle and app/build.gradle(.kts)." >&2
+            find "$RUNNER_TEMP/umbrella-project" -maxdepth 6 -type f | head -200
             exit 1
           fi
+          echo "project_dir=$PROJECT" >> "$GITHUB_OUTPUT"
+          echo "Found project at: $PROJECT"
 
-          echo "PROJECT_DIR=$PROJECT" >> "$GITHUB_ENV"
-          echo "Found Android project: $PROJECT"
-
-      - name: Build APK
+      - name: Build debug APK
         shell: bash
+        env:
+          PROJECT_DIR: ${{ steps.project.outputs.project_dir }}
         run: |
           set -euo pipefail
           cd "$PROJECT_DIR"
           gradle assembleDebug --stacktrace
 
-      - name: Upload APK
+      - name: Verify APK exists
+        id: apk
+        shell: bash
+        env:
+          PROJECT_DIR: ${{ steps.project.outputs.project_dir }}
+        run: |
+          set -euo pipefail
+          APK="$PROJECT_DIR/app/build/outputs/apk/debug/app-debug.apk"
+          if [ ! -s "$APK" ]; then
+            echo "ERROR: APK missing or empty: $APK" >&2
+            find "$PROJECT_DIR/app/build/outputs" -maxdepth 6 -type f 2>/dev/null || true
+            exit 1
+          fi
+          echo "apk_path=$APK" >> "$GITHUB_OUTPUT"
+          sha256sum "$APK"
+          ls -lh "$APK"
+
+      - name: Upload debug APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: Umbrella-Corp-debug-apk
-          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/app-debug.apk
+          path: ${{ steps.apk.outputs.apk_path }}
           if-no-files-found: error
           retention-days: 14
