@@ -5,8 +5,11 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'FreeApiRadar-Android-Source.zip'
+      - 'FreeApiRadar-Umbrella-Umbra-Watch-1.3.zip'
       - '.github/workflows/android.yml'
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -22,26 +25,12 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Locate Android SDK Manager
-        shell: bash
-        run: |
-          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
-          SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
-          if [ -z "$SDKMANAGER" ]; then
-            echo "ERROR: sdkmanager not found"
-            exit 1
-          fi
-          echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
-          echo "Found: $SDKMANAGER"
-
-      - name: Accept Android SDK licenses
-        shell: bash
-        run: |
-          yes | "$SDKMANAGER" --licenses || true
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
 
       - name: Install Android SDK packages
         run: |
-          "$SDKMANAGER" \
+          sdkmanager \
             "platform-tools" \
             "platforms;android-35" \
             "build-tools;35.0.0"
@@ -51,19 +40,12 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Extract project
+      - name: Extract Umbra Watch 1.3
         run: |
-          unzip -q FreeApiRadar-Android-Source.zip -d source
+          unzip -q FreeApiRadar-Umbrella-Umbra-Watch-1.3.zip -d source
           test -f source/FreeApiRadar/app/build.gradle.kts
-
-      - name: Fix Kotlin plugin versions
-        shell: bash
-        run: |
-          cd source/FreeApiRadar
-          sed -i 's/id("org.jetbrains.kotlin.kapt") version "2.0.21" apply false/id("org.jetbrains.kotlin.kapt") version "1.9.25" apply false/' build.gradle.kts
-          echo "Root Gradle configuration:"
-          cat build.gradle.kts
-          grep -q 'org.jetbrains.kotlin.kapt.*1.9.25' build.gradle.kts
+          test -f source/FreeApiRadar/build.gradle.kts
+          test -f source/FreeApiRadar/app/src/main/AndroidManifest.xml
 
       - name: Build APK
         working-directory: source/FreeApiRadar
