@@ -7,7 +7,6 @@ on:
     paths:
       - 'FreeApiRadar-Android-Source.zip'
       - '.github/workflows/android.yml'
-      - 'android.yml'
 
 jobs:
   build:
@@ -26,7 +25,6 @@ jobs:
       - name: Locate Android SDK Manager
         shell: bash
         run: |
-          echo "ANDROID_HOME=${ANDROID_HOME:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
           SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
           SDKMANAGER="$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
           if [ -z "$SDKMANAGER" ]; then
@@ -34,14 +32,12 @@ jobs:
             exit 1
           fi
           echo "SDKMANAGER=$SDKMANAGER" >> "$GITHUB_ENV"
-          echo "Found SDK Manager: $SDKMANAGER"
+          echo "Found: $SDKMANAGER"
 
       - name: Accept Android SDK licenses
         shell: bash
         run: |
-          set +o pipefail
-          yes | "$SDKMANAGER" --licenses
-          set -o pipefail
+          yes | "$SDKMANAGER" --licenses || true
 
       - name: Install Android SDK packages
         run: |
@@ -59,6 +55,15 @@ jobs:
         run: |
           unzip -q FreeApiRadar-Android-Source.zip -d source
           test -f source/FreeApiRadar/app/build.gradle.kts
+
+      - name: Fix Kotlin plugin versions
+        shell: bash
+        run: |
+          cd source/FreeApiRadar
+          sed -i 's/id("org.jetbrains.kotlin.kapt") version "2.0.21" apply false/id("org.jetbrains.kotlin.kapt") version "1.9.25" apply false/' build.gradle.kts
+          echo "Root Gradle configuration:"
+          cat build.gradle.kts
+          grep -q 'org.jetbrains.kotlin.kapt.*1.9.25' build.gradle.kts
 
       - name: Build APK
         working-directory: source/FreeApiRadar
