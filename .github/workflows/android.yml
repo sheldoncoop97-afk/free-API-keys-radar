@@ -15,7 +15,7 @@ jobs:
   build:
     name: Build Android APK
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
 
     steps:
       - name: Checkout repository
@@ -36,28 +36,73 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           sdkmanager --install \
+            "platform-tools" \
             "platforms;android-35" \
-            "build-tools;35.0.0"
+            "platforms;android-36" \
+            "build-tools;35.0.0" \
+            "build-tools;36.0.0"
+
+      - name: Extract Android project ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ZIP_FILE="Umbrella-Corp-Android-Project-Visual-Refresh-Result-Management.zip"
+          EXTRACT_DIR="$GITHUB_WORKSPACE/android-source"
+
+          if [ ! -f "$ZIP_FILE" ]; then
+            echo "::error::Required ZIP not found: $ZIP_FILE"
+            exit 1
+          fi
+
+          mkdir -p "$EXTRACT_DIR"
+          unzip -q "$ZIP_FILE" -d "$EXTRACT_DIR"
+
+          echo "ZIP extracted successfully."
+          echo "Searching for Gradle project files..."
+
+          find "$EXTRACT_DIR" -type f \
+            \( -name "settings.gradle" -o -name "settings.gradle.kts" \) \
+            -print
 
       - name: Locate Android project
         shell: bash
         run: |
           set -euo pipefail
 
-          if [ -f "settings.gradle.kts" ] || [ -f "settings.gradle" ]; then
-            PROJECT_DIR="."
-          elif [ -f "UmbrellaCorp-project/settings.gradle.kts" ] || [ -f "UmbrellaCorp-project/settings.gradle" ]; then
-            PROJECT_DIR="UmbrellaCorp-project"
-          else
-            echo "::error::Gradle settings file not found in repository root or UmbrellaCorp-project/"
-            echo "Repository files:"
-            ls -la
+          SOURCE_DIR="$GITHUB_WORKSPACE/android-source"
+          PROJECT_DIR=""
+
+          while IFS= read -r -d '' SETTINGS_FILE; do
+            CANDIDATE="$(dirname "$SETTINGS_FILE")"
+
+            if [ -f "$CANDIDATE/app/build.gradle" ] || \
+               [ -f "$CANDIDATE/app/build.gradle.kts" ]; then
+              PROJECT_DIR="$CANDIDATE"
+              break
+            fi
+          done < <(
+            find "$SOURCE_DIR" -type f \
+              \( -name "settings.gradle" -o -name "settings.gradle.kts" \) \
+              -print0
+          )
+
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "::error::Could not find a Gradle project with an app module inside the ZIP."
+            echo "Files found in the archive:"
+            find "$SOURCE_DIR" -maxdepth 5 -type f \
+              \( -name "settings.gradle" \
+              -o -name "settings.gradle.kts" \
+              -o -name "build.gradle" \
+              -o -name "build.gradle.kts" \
+              -o -name "gradlew" \) -print
             exit 1
           fi
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-          echo "Android project found in: $PROJECT_DIR"
+          echo "Android project found: $PROJECT_DIR"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -69,13 +114,19 @@ jobs:
         run: |
           set -euo pipefail
           cd "$PROJECT_DIR"
-          gradle --no-daemon --stacktrace assembleDebug
+
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+            ./gradlew --no-daemon --stacktrace assembleDebug
+          else
+            gradle --no-daemon --stacktrace assembleDebug
+          fi
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Umbrella-Corp-debug-apk
           path: |
-            **/build/outputs/apk/debug/*.apk
+            android-source/**/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
