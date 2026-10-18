@@ -1,4 +1,3 @@
-name: Build Umbrella Corp APK
 
 name: Build Umbrella Corp APK
 
@@ -64,13 +63,13 @@ jobs:
           mkdir -p "$DEST"
 
           if [ ! -f "$ZIP" ]; then
-            echo "ERROR: ZIP not found: $ZIP" >&2
-            echo "ZIP files in repository root:"
+            echo "ERROR: Required ZIP not found: $ZIP" >&2
+            echo "ZIP files found in repository root:"
             find . -maxdepth 1 -type f -iname '*.zip' -printf '%f\n' | sort || true
             exit 1
           fi
 
-          echo "Building from: $ZIP"
+          echo "Selected archive: $ZIP"
           unzip -q "$ZIP" -d "$DEST"
 
           PROJECT=""
@@ -84,13 +83,13 @@ jobs:
           done < <(find "$DEST" -type f \( -name settings.gradle -o -name settings.gradle.kts \) | sort)
 
           if [ -z "$PROJECT" ]; then
-            echo "ERROR: Android Gradle project not found inside ZIP." >&2
+            echo "ERROR: Android Gradle project not found inside the selected ZIP." >&2
             find "$DEST" -maxdepth 6 -type f | head -200
             exit 1
           fi
 
           echo "project_dir=$PROJECT" >> "$GITHUB_OUTPUT"
-          echo "Found project: $PROJECT"
+          echo "Project directory: $PROJECT"
 
       - name: Build debug APK
         shell: bash
@@ -120,7 +119,7 @@ jobs:
           sha256sum "$APK"
           ls -lh "$APK"
 
-      - name: Upload debug APK
+      - name: Upload debug APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: Umbrella-Corp-Visual-Refresh-debug-apk
