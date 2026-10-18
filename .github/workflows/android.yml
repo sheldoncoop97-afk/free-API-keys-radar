@@ -1,29 +1,21 @@
 
-name: Build Umbrella Corp APK
+name: Umbrella Corp Android Build
 
 on:
   workflow_dispatch:
   push:
-    paths:
-      - '*.zip'
-      - '.github/workflows/android.yml'
+    branches:
+      - main
+      - master
 
 permissions:
   contents: read
 
-concurrency:
-  group: umbrella-android-build-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   build:
-    name: Build Android debug APK
+    name: Build Android APK
     runs-on: ubuntu-latest
     timeout-minutes: 35
-
-    env:
-      ANDROID_HOME: /usr/local/lib/android/sdk
-      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
     steps:
       - name: Checkout repository
@@ -35,94 +27,50 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
       - name: Install Android SDK packages
+        run: |
+          sdkmanager --install \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
+
+      - name: Locate Android project
         shell: bash
         run: |
           set -euo pipefail
-          SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
-          if [ -z "$SDKMANAGER" ]; then
-            echo "ERROR: sdkmanager not found" >&2
+
+          if [ -f "settings.gradle.kts" ] || [ -f "settings.gradle" ]; then
+            PROJECT_DIR="."
+          elif [ -f "UmbrellaCorp-project/settings.gradle.kts" ] || [ -f "UmbrellaCorp-project/settings.gradle" ]; then
+            PROJECT_DIR="UmbrellaCorp-project"
+          else
+            echo "ERROR: Gradle settings file not found."
+            echo "Check that the Android project is in the repository."
             exit 1
           fi
-          yes | "$SDKMANAGER" --licenses >/dev/null || true
-          "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "Android project found in: $PROJECT_DIR"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
 
-      - name: Extract Visual Refresh ZIP
-        id: project
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          ZIP="./Umbrella-Corp-Android-Project-Visual-Refresh.zip"
-          DEST="$RUNNER_TEMP/umbrella-project"
-          mkdir -p "$DEST"
-
-          if [ ! -f "$ZIP" ]; then
-            echo "ERROR: Required ZIP not found: $ZIP" >&2
-            echo "ZIP files found in repository root:"
-            find . -maxdepth 1 -type f -iname '*.zip' -printf '%f\n' | sort || true
-            exit 1
-          fi
-
-          echo "Selected archive: $ZIP"
-          unzip -q "$ZIP" -d "$DEST"
-
-          PROJECT=""
-          while IFS= read -r SETTINGS; do
-            DIR="$(dirname "$SETTINGS")"
-            if { [ -f "$DIR/app/build.gradle" ] || [ -f "$DIR/app/build.gradle.kts" ]; } \
-              && { [ -f "$DIR/settings.gradle" ] || [ -f "$DIR/settings.gradle.kts" ]; }; then
-              PROJECT="$DIR"
-              break
-            fi
-          done < <(find "$DEST" -type f \( -name settings.gradle -o -name settings.gradle.kts \) | sort)
-
-          if [ -z "$PROJECT" ]; then
-            echo "ERROR: Android Gradle project not found inside the selected ZIP." >&2
-            find "$DEST" -maxdepth 6 -type f | head -200
-            exit 1
-          fi
-
-          echo "project_dir=$PROJECT" >> "$GITHUB_OUTPUT"
-          echo "Project directory: $PROJECT"
-
       - name: Build debug APK
         shell: bash
-        env:
-          PROJECT_DIR: ${{ steps.project.outputs.project_dir }}
         run: |
           set -euo pipefail
           cd "$PROJECT_DIR"
-          gradle assembleDebug --stacktrace
+          gradle --no-daemon --stacktrace assembleDebug
 
-      - name: Verify APK
-        id: apk
-        shell: bash
-        env:
-          PROJECT_DIR: ${{ steps.project.outputs.project_dir }}
-        run: |
-          set -euo pipefail
-          APK="$PROJECT_DIR/app/build/outputs/apk/debug/app-debug.apk"
-
-          if [ ! -s "$APK" ]; then
-            echo "ERROR: APK missing or empty: $APK" >&2
-            find "$PROJECT_DIR/app/build/outputs" -maxdepth 6 -type f 2>/dev/null || true
-            exit 1
-          fi
-
-          echo "apk_path=$APK" >> "$GITHUB_OUTPUT"
-          sha256sum "$APK"
-          ls -lh "$APK"
-
-      - name: Upload debug APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Umbrella-Corp-Visual-Refresh-debug-apk
-          path: ${{ steps.apk.outputs.apk_path }}
+          name: Umbrella-Corp-debug-apk
+          path: '**/app/build/outputs/apk/debug/app-debug.apk'
           if-no-files-found: error
           retention-days: 14
