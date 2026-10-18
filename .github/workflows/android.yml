@@ -1,5 +1,7 @@
 name: Build Umbrella Corp APK
 
+name: Build Umbrella Corp APK
+
 on:
   workflow_dispatch:
   push:
@@ -40,7 +42,7 @@ jobs:
           set -euo pipefail
           SDKMANAGER="$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)"
           if [ -z "$SDKMANAGER" ]; then
-            echo "ERROR: sdkmanager not found in $ANDROID_HOME/cmdline-tools" >&2
+            echo "ERROR: sdkmanager not found" >&2
             exit 1
           fi
           yes | "$SDKMANAGER" --licenses >/dev/null || true
@@ -51,29 +53,26 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Find and extract Android project ZIP
+      - name: Extract Visual Refresh ZIP
         id: project
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/umbrella-project"
-          ZIP=""
-          for CANDIDATE in \
-            "Umbrella-Corp-Android-Project-Professional.zip" \
-            "Umbrella-Corp-Android-Project-Visual-Refresh.zip" \
-            "Umbrella-Corp-Android-Project.zip"; do
-            if [ -f "$CANDIDATE" ]; then ZIP="$CANDIDATE"; break; fi
-          done
-          if [ -z "$ZIP" ]; then
-            ZIP="$(find . -maxdepth 1 -type f -name '*.zip' -printf '%f\n' | sort | head -n 1)"
-          fi
-          if [ -z "$ZIP" ] || [ ! -f "$ZIP" ]; then
-            echo "ERROR: No project ZIP found in repository root." >&2
-            ls -la
+
+          ZIP="./Umbrella-Corp-Android-Project-Visual-Refresh.zip"
+          DEST="$RUNNER_TEMP/umbrella-project"
+          mkdir -p "$DEST"
+
+          if [ ! -f "$ZIP" ]; then
+            echo "ERROR: ZIP not found: $ZIP" >&2
+            echo "ZIP files in repository root:"
+            find . -maxdepth 1 -type f -iname '*.zip' -printf '%f\n' | sort || true
             exit 1
           fi
-          echo "Selected project archive: $ZIP"
-          unzip -q "$ZIP" -d "$RUNNER_TEMP/umbrella-project"
+
+          echo "Building from: $ZIP"
+          unzip -q "$ZIP" -d "$DEST"
+
           PROJECT=""
           while IFS= read -r SETTINGS; do
             DIR="$(dirname "$SETTINGS")"
@@ -82,14 +81,16 @@ jobs:
               PROJECT="$DIR"
               break
             fi
-          done < <(find "$RUNNER_TEMP/umbrella-project" -type f \( -name settings.gradle -o -name settings.gradle.kts \) | sort)
+          done < <(find "$DEST" -type f \( -name settings.gradle -o -name settings.gradle.kts \) | sort)
+
           if [ -z "$PROJECT" ]; then
-            echo "ERROR: Could not locate an Android Gradle project with settings.gradle and app/build.gradle(.kts)." >&2
-            find "$RUNNER_TEMP/umbrella-project" -maxdepth 6 -type f | head -200
+            echo "ERROR: Android Gradle project not found inside ZIP." >&2
+            find "$DEST" -maxdepth 6 -type f | head -200
             exit 1
           fi
+
           echo "project_dir=$PROJECT" >> "$GITHUB_OUTPUT"
-          echo "Found project at: $PROJECT"
+          echo "Found project: $PROJECT"
 
       - name: Build debug APK
         shell: bash
@@ -100,7 +101,7 @@ jobs:
           cd "$PROJECT_DIR"
           gradle assembleDebug --stacktrace
 
-      - name: Verify APK exists
+      - name: Verify APK
         id: apk
         shell: bash
         env:
@@ -108,19 +109,21 @@ jobs:
         run: |
           set -euo pipefail
           APK="$PROJECT_DIR/app/build/outputs/apk/debug/app-debug.apk"
+
           if [ ! -s "$APK" ]; then
             echo "ERROR: APK missing or empty: $APK" >&2
             find "$PROJECT_DIR/app/build/outputs" -maxdepth 6 -type f 2>/dev/null || true
             exit 1
           fi
+
           echo "apk_path=$APK" >> "$GITHUB_OUTPUT"
           sha256sum "$APK"
           ls -lh "$APK"
 
-      - name: Upload debug APK artifact
+      - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: Umbrella-Corp-debug-apk
+          name: Umbrella-Corp-Visual-Refresh-debug-apk
           path: ${{ steps.apk.outputs.apk_path }}
           if-no-files-found: error
           retention-days: 14
