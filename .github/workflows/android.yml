@@ -29,11 +29,14 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
 
       - name: Install Android SDK packages
+        shell: bash
         run: |
+          set -euo pipefail
           sdkmanager --install \
-            "platform-tools" \
             "platforms;android-35" \
             "build-tools;35.0.0"
 
@@ -47,8 +50,9 @@ jobs:
           elif [ -f "UmbrellaCorp-project/settings.gradle.kts" ] || [ -f "UmbrellaCorp-project/settings.gradle" ]; then
             PROJECT_DIR="UmbrellaCorp-project"
           else
-            echo "ERROR: Gradle settings file not found."
-            echo "Check that the Android project is in the repository."
+            echo "::error::Gradle settings file not found in repository root or UmbrellaCorp-project/"
+            echo "Repository files:"
+            ls -la
             exit 1
           fi
 
@@ -71,6 +75,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Umbrella-Corp-debug-apk
-          path: '**/app/build/outputs/apk/debug/app-debug.apk'
+          path: |
+            **/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 14
