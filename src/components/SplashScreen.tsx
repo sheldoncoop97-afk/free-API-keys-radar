@@ -134,10 +134,10 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete, autoStar
             className="px-6 py-2.5 rounded-full bg-gradient-to-r from-red-700 to-red-600 text-white font-bold text-sm tracking-wider uppercase shadow-[0_0_25px_rgba(239,68,68,0.7)] hover:scale-105 active:scale-95 transition-all flex items-center gap-2 border border-red-400/50"
           >
             <Play size={16} className="fill-white" />
-            <span>Engage Audio Systems</span>
+            <span>Play 6-Second Welcome</span>
           </button>
           <span className="text-[11px] font-mono text-zinc-500 mt-2">
-            Click to activate mechanical soundscape & voice synthesis
+            “Welcome to Umbrella Corporation” • female computer voice
           </span>
         </div>
       )}

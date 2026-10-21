@@ -2,9 +2,15 @@
 
 let audioCtx: AudioContext | null = null;
 let soundEnabled = true;
+let splashTimers: number[] = [];
 
 export const setSoundEnabled = (enabled: boolean) => {
   soundEnabled = enabled;
+  if (!enabled) {
+    splashTimers.forEach(window.clearTimeout);
+    splashTimers = [];
+    window.speechSynthesis?.cancel();
+  }
 };
 
 export const isSoundEnabled = () => soundEnabled;
@@ -114,28 +120,25 @@ export const playDigitalScanBeeps = () => {
   }
 };
 
-// 4. Głos lektora: "Welcome to Umbrella Corporation" (zimny, męski, spokojny)
-export const speakUmbrellaVoice = (text = "Welcome to Umbrella Corporation. Our business is life itself.") => {
+// 4. Komputerowy głos powitalny
+export const speakUmbrellaVoice = (text = "Welcome to Umbrella Corporation.") => {
   if (!soundEnabled) return;
   if (!('speechSynthesis' in window)) return;
 
   try {
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.88; // Deliberate, calm
-    utterance.pitch = 0.72; // Deep, cold, masculine
+    utterance.lang = 'en-US';
+    utterance.rate = 0.92;
+    utterance.pitch = 1.12;
     utterance.volume = 0.95;
 
     const voices = window.speechSynthesis.getVoices();
-    // Look for cold English/international male voice
-    const maleVoice = voices.find(v =>
-      (v.name.includes('Male') || v.name.includes('David') || v.name.includes('George') || v.name.includes('Google UK English Male')) &&
-      (v.lang.startsWith('en') || v.lang.startsWith('pl'))
-    ) || voices.find(v => v.lang.startsWith('en'));
-
-    if (maleVoice) {
-      utterance.voice = maleVoice;
-    }
+    const englishVoices = voices.filter((voice) => voice.lang.toLowerCase().startsWith('en'));
+    const femaleVoice = englishVoices.find((voice) =>
+      /female|samantha|ava|zira|aria|jenny|sonia|karen|susan|victoria/i.test(voice.name)
+    );
+    if (femaleVoice || englishVoices[0]) utterance.voice = femaleVoice || englishVoices[0];
 
     window.speechSynthesis.speak(utterance);
   } catch (e) {
@@ -146,16 +149,16 @@ export const speakUmbrellaVoice = (text = "Welcome to Umbrella Corporation. Our 
 // Complete Startup Sequence: Combines sub-bass, hum, telemetry, and speech
 export const triggerFullSplashAudio = () => {
   if (!soundEnabled) return;
+  splashTimers.forEach(window.clearTimeout);
+  splashTimers = [];
   playSubBassStart();
-  setTimeout(() => {
-    playMechanicalHum(2.0);
-  }, 400);
-  setTimeout(() => {
-    playDigitalScanBeeps();
-  }, 1200);
-  setTimeout(() => {
+  splashTimers.push(window.setTimeout(() => {
+    playMechanicalHum(5.6);
     speakUmbrellaVoice("Welcome to Umbrella Corporation.");
-  }, 2800);
+  }, 400));
+  splashTimers.push(window.setTimeout(() => {
+    playDigitalScanBeeps();
+  }, 1400));
 };
 
 // UI Click / Radar Feedback
