@@ -26,7 +26,11 @@ npm test
 npm run build
 ```
 
-The `.github/workflows/build-web.yml` workflow runs these same checks and uploads `dist/` as the **FreeApiRadar-web-dist** artifact. It does not label a ZIP of web files as an APK. The separate Android workflow builds the native project from the checked-in Android source archive.
+The `.github/workflows/build-web.yml` workflow runs these same checks and uploads `dist/` as the **FreeApiRadar-web-dist** artifact. The `.github/workflows/android.yml` workflow packages that same production build with Capacitor and Gradle, then uploads a real debug APK as **FreeApiRadar-Android-debug-apk**. Both workflows run on branch pushes and can also be started manually from the Actions tab.
+
+To download the APK, open the successful **Build Umbrella Corp Android APK** run in GitHub Actions and download the **FreeApiRadar-Android-debug-apk** artifact. The debug APK is suitable for testing/sideloading and is not a signed Play Store release.
+
+The Android app bundles the web UI. Live search and media generation require the Express API server and a server-side `GEMINI_API_KEY`; configure and deploy that backend separately before expecting those online features to work in the installed app.
 
 ## API key links
 

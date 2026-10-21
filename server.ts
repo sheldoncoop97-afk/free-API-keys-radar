@@ -252,8 +252,13 @@ app.get('/api/download-zip', async (_req, res) => {
     };
     addDirectory('src', 'src');
     addDirectory('public', 'public');
-    const workflowFile = path.join(__dirname, '.github/workflows/build-web.yml');
-    if (fs.existsSync(workflowFile)) root.file('.github/workflows/build-web.yml', fs.readFileSync(workflowFile));
+    addDirectory('android', 'android');
+    for (const workflow of ['android.yml', 'build-web.yml']) {
+      const workflowFile = path.join(__dirname, '.github/workflows', workflow);
+      if (fs.existsSync(workflowFile)) {
+        root.file(`.github/workflows/${workflow}`, fs.readFileSync(workflowFile));
+      }
+    }
 
     const buffer = await zip.generateAsync({ type: 'nodebuffer' });
     res.setHeader('Content-Type', 'application/zip');
