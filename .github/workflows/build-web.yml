@@ -1,0 +1,45 @@
+name: Build and verify web app
+
+on:
+  push:
+    branches: ["main", "master"]
+  pull_request:
+    branches: ["main", "master"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-web:
+    name: Lint, test, and build web distribution
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Type-check application and server
+        run: npm run lint
+
+      - name: Run focused server tests
+        run: npm test
+
+      - name: Build web application
+        run: npm run build
+
+      - name: Upload web distribution
+        uses: actions/upload-artifact@v4
+        with:
+          name: FreeApiRadar-web-dist
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30

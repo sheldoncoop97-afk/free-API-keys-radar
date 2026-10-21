@@ -1,0 +1,6 @@
+{
+  "name": "Free API Radar - Umbrella Corporation",
+  "description": "Umbrella Corporation classified cyber intelligence radar for free APIs, image-to-video generation, and developer tools.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
