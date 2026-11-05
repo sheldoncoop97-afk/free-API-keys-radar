@@ -1,0 +1,9 @@
+UMBRELLA VISUAL ASSET MAP
+
+app/src/main/res/drawable/umbrella_icon.png — app header emblem (separate from splash image)
+app/src/main/res/drawable/umbrella_splash.jpg — launch/splash art, 1080x1920
+app/src/main/res/drawable-nodpi/umbrella_interior_bg.jpg — interior app wallpaper, 1080x1920, darkened
+app/src/main/res/drawable/ic_launcher_foreground.xml — adaptive launcher emblem vector
+app/src/main/res/raw/umbrella_intro.mp3 — existing launch music, retained unchanged
+
+Design-assets folder contains export-ready icon sizes, transparent emblem, original reference artwork and previews.
